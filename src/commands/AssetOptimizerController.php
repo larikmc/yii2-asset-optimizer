@@ -452,12 +452,21 @@ class AssetOptimizerController extends Controller
      */
     private function detectDefaultBundles(): array
     {
-        $candidates = [
-            'frontend\assets\AppAsset',
-            'backend\assets\AppAsset',
-            'app\assets\AppAsset',
-            'yii\web\YiiAsset',
-        ];
+        $candidates = [];
+
+        if ($this->app === 'backend') {
+            $candidates[] = 'backend\assets\AppAsset';
+        } elseif ($this->app === 'frontend') {
+            $candidates[] = 'frontend\assets\AppAsset';
+        } else {
+            if (class_exists('frontend\assets\AppAsset')) {
+                $candidates[] = 'frontend\assets\AppAsset';
+            } elseif (class_exists('app\assets\AppAsset')) {
+                $candidates[] = 'app\assets\AppAsset';
+            }
+        }
+
+        $candidates[] = 'yii\web\YiiAsset';
 
         $existing = [];
         foreach ($candidates as $class) {
