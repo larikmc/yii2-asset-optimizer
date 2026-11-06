@@ -1,0 +1,7 @@
+/vendor/
+/node_modules/
+/tests/runtime/
+.build.lock
+.phpunit.cache/
+.DS_Store
+Thumbs.db

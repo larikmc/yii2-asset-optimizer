@@ -1,0 +1,50 @@
+{
+    "name": "larikmc/yii2-asset-optimizer",
+    "description": "High-performance zero-runtime-overhead CSS and JavaScript optimizer for Yii2 powered by esbuild, content-hashed manifests, atomic releases and APCu caching",
+    "keywords": [
+        "yii2",
+        "asset-optimizer",
+        "esbuild",
+        "minify",
+        "assets",
+        "css",
+        "javascript",
+        "performance",
+        "cache-busting",
+        "manifest",
+        "zero-downtime"
+    ],
+    "type": "yii2-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "LarikMC",
+            "homepage": "https://64web.ru",
+            "email": "larikmc@mail.ru"
+        }
+    ],
+    "require": {
+        "php": ">=8.0.0",
+        "yiisoft/yii2": "~2.0.0",
+        "ext-json": "*"
+    },
+    "suggest": {
+        "ext-apcu": "Enables ultra-fast in-memory caching of the active asset manifest across PHP processes."
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0 || ^10.0 || ^11.0 || ^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "larikmc\\assetoptimizer\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "larikmc\\assetoptimizer\\tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "bootstrap": "larikmc\\assetoptimizer\\Bootstrap"
+    }
+}
