@@ -489,6 +489,9 @@ class AssetOptimizerController extends Controller
 
         if ($this->app === 'backend') {
             $candidates[] = 'backend\assets\AppAsset';
+            $candidates[] = 'larikmc\admin\assets\AppAsset';
+            $candidates[] = 'larikmc\admin\auth\assets\AuthAsset';
+            $candidates[] = 'yii\bootstrap5\BootstrapPluginAsset';
         } elseif ($this->app === 'frontend') {
             $candidates[] = 'frontend\assets\AppAsset';
         } else {
@@ -500,6 +503,11 @@ class AssetOptimizerController extends Controller
         }
 
         $candidates[] = 'yii\web\YiiAsset';
+        $candidates[] = 'yii\widgets\ActiveFormAsset';
+        $candidates[] = 'yii\validators\ValidationAsset';
+        $candidates[] = 'yii\grid\GridViewAsset';
+        $candidates[] = 'yii\widgets\PjaxAsset';
+        $candidates[] = 'yii\captcha\CaptchaAsset';
 
         $existing = [];
         foreach ($candidates as $class) {

@@ -55,7 +55,24 @@ class OptimizingAssetManager extends AssetManager
      */
     public bool $bypassSourcePathPublish = false;
 
+    /**
+     * @var bool Preserved setting for unoptimized assets fallback.
+     */
+    public bool $appendTimestampForUnoptimized = false;
+
     private ?ManifestRegistry $_manifestRegistry = null;
+
+    public function init(): void
+    {
+        parent::init();
+
+        if ($this->enabled) {
+            // Preserve configured appendTimestamp for unoptimized fallback assets
+            $this->appendTimestampForUnoptimized = (bool) $this->appendTimestamp;
+            // Disable global appendTimestamp so yii\web\View does NOT issue filemtime() disk checks on HTTP requests
+            $this->appendTimestamp = false;
+        }
+    }
 
     /**
      * Returns the actual URL for the specified asset.
@@ -70,7 +87,8 @@ class OptimizingAssetManager extends AssetManager
     public function getAssetUrl($bundle, $asset, $appendTimestamp = null): string
     {
         if (!$this->enabled || $this->isBundleExcluded($bundle) || $this->isFileExcluded($asset)) {
-            return parent::getAssetUrl($bundle, $asset, $appendTimestamp);
+            $ts = $appendTimestamp ?? $this->appendTimestampForUnoptimized;
+            return parent::getAssetUrl($bundle, $asset, $ts);
         }
 
         $key = $this->buildAssetKey($bundle, $asset);
@@ -82,7 +100,8 @@ class OptimizingAssetManager extends AssetManager
             return $optimizedUrl;
         }
 
-        return parent::getAssetUrl($bundle, $asset, $appendTimestamp);
+        $ts = $appendTimestamp ?? $this->appendTimestampForUnoptimized;
+        return parent::getAssetUrl($bundle, $asset, $ts);
     }
 
     /**
