@@ -95,6 +95,46 @@ class AssetOptimizerController extends Controller
      */
     public string $optimizedBaseUrl = '@web/optimized';
 
+    public function init(): void
+    {
+        parent::init();
+
+        if (Yii::getAlias('@webroot', false) === false) {
+            if (Yii::getAlias('@frontend/web', false) !== false) {
+                Yii::setAlias('@webroot', Yii::getAlias('@frontend/web'));
+            } elseif (Yii::getAlias('@app/web', false) !== false) {
+                Yii::setAlias('@webroot', Yii::getAlias('@app/web'));
+            }
+        }
+        if (Yii::getAlias('@web', false) === false) {
+            Yii::setAlias('@web', '');
+        }
+    }
+
+    public function beforeAction($action): bool
+    {
+        if (!parent::beforeAction($action)) {
+            return false;
+        }
+
+        if ($this->app === 'backend') {
+            if (Yii::getAlias('@backend', false) !== false) {
+                $this->runtimePath = '@backend/runtime/asset-optimizer';
+                $this->optimizedBasePath = '@backend/web/optimized';
+                $this->optimizedBaseUrl = '/optimized';
+            }
+        } else {
+            // default / frontend in Yii2 Advanced
+            if (Yii::getAlias('@frontend', false) !== false) {
+                $this->runtimePath = '@frontend/runtime/asset-optimizer';
+                $this->optimizedBasePath = '@frontend/web/optimized';
+                $this->optimizedBaseUrl = '/optimized';
+            }
+        }
+
+        return true;
+    }
+
     public function options($actionID): array
     {
         $common = ['app'];
