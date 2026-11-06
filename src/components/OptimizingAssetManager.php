@@ -135,8 +135,10 @@ class OptimizingAssetManager extends AssetManager
      */
     public function buildAssetKey($bundle, string $asset): string
     {
-        $bundleClass = get_class($bundle);
-        $cleanAsset = ltrim(str_replace('\\', '/', $asset), '/');
+        $bundleClass = is_object($bundle) ? get_class($bundle) : (string) $bundle;
+        $cleanPath = strtok($asset, '?#');
+        $cleanAsset = ($cleanPath !== false && $cleanPath !== '') ? $cleanPath : $asset;
+        $cleanAsset = ltrim(str_replace('\\', '/', $cleanAsset), '/');
 
         return "{$bundleClass}:{$cleanAsset}";
     }
@@ -157,10 +159,15 @@ class OptimizingAssetManager extends AssetManager
             return false;
         }
 
-        $norm = str_replace('\\', '/', $file);
+        $cleanPath = strtok($file, '?#');
+        $cleanFile = ($cleanPath !== false && $cleanPath !== '') ? $cleanPath : $file;
+
+        $norm = str_replace('\\', '/', $cleanFile);
+        $normRaw = str_replace('\\', '/', $file);
         foreach ($this->excludedFiles as $pattern) {
             $normPattern = str_replace('\\', '/', $pattern);
-            if (fnmatch($normPattern, $norm) || str_contains($norm, $normPattern)) {
+            if (fnmatch($normPattern, $norm) || str_contains($norm, $normPattern)
+                || fnmatch($normPattern, $normRaw) || str_contains($normRaw, $normPattern)) {
                 return true;
             }
         }

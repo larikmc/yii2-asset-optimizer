@@ -81,7 +81,10 @@ class AssetScanner
 
         // 2. Scan extra standalone files
         foreach ($this->extraFiles as $file) {
-            $resolved = Yii::getAlias($file);
+            $cleanFile = strtok($file, '?#');
+            $cleanFile = ($cleanFile !== false && $cleanFile !== '') ? $cleanFile : $file;
+
+            $resolved = Yii::getAlias($cleanFile);
             if (!file_exists($resolved)) {
                 continue;
             }
@@ -91,7 +94,7 @@ class AssetScanner
                 continue;
             }
 
-            if ($this->isFileExcluded($file) || $this->isFileExcluded($resolved)) {
+            if ($this->isFileExcluded($file) || $this->isFileExcluded($cleanFile) || $this->isFileExcluded($resolved)) {
                 continue;
             }
 
@@ -151,18 +154,21 @@ class AssetScanner
                 continue;
             }
 
-            if ($this->isFileExcluded($file)) {
+            $cleanPath = strtok($file, '?#');
+            $cleanFile = ($cleanPath !== false && $cleanPath !== '') ? $cleanPath : $file;
+
+            if ($this->isFileExcluded($cleanFile) || $this->isFileExcluded($file)) {
                 continue;
             }
 
-            $absPath = $baseDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
-            $normalizedKey = $bundleClass . ':' . ltrim(str_replace('\\', '/', $file), '/');
+            $absPath = $baseDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $cleanFile);
+            $normalizedKey = $bundleClass . ':' . ltrim(str_replace('\\', '/', $cleanFile), '/');
 
             $results[] = [
                 'key' => $normalizedKey,
                 'type' => 'css',
                 'bundleClass' => $bundleClass,
-                'sourceRelativePath' => $file,
+                'sourceRelativePath' => $cleanFile,
                 'sourceAbsolutePath' => $absPath,
             ];
         }
@@ -174,18 +180,21 @@ class AssetScanner
                 continue;
             }
 
-            if ($this->isFileExcluded($file)) {
+            $cleanPath = strtok($file, '?#');
+            $cleanFile = ($cleanPath !== false && $cleanPath !== '') ? $cleanPath : $file;
+
+            if ($this->isFileExcluded($cleanFile) || $this->isFileExcluded($file)) {
                 continue;
             }
 
-            $absPath = $baseDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
-            $normalizedKey = $bundleClass . ':' . ltrim(str_replace('\\', '/', $file), '/');
+            $absPath = $baseDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $cleanFile);
+            $normalizedKey = $bundleClass . ':' . ltrim(str_replace('\\', '/', $cleanFile), '/');
 
             $results[] = [
                 'key' => $normalizedKey,
                 'type' => 'js',
                 'bundleClass' => $bundleClass,
-                'sourceRelativePath' => $file,
+                'sourceRelativePath' => $cleanFile,
                 'sourceAbsolutePath' => $absPath,
             ];
         }

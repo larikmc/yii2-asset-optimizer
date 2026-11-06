@@ -58,6 +58,10 @@ class OptimizingAssetManagerTest extends TestCase
         $this->assertSame('/optimized/sample.1234567890ab.min.css', $url);
         $this->assertSame('sha384-csshash', $manager->getAssetIntegrity($bundle, 'sample.css'));
 
+        // Asset requested with query string (?v=12345) should resolve to the clean optimized asset
+        $urlWithQuery = $manager->getAssetUrl($bundle, 'sample.css?v=173000000');
+        $this->assertSame('/optimized/sample.1234567890ab.min.css', $urlWithQuery);
+
         // Unoptimized asset should fallback to standard URL
         $unoptimizedUrl = $manager->getAssetUrl($bundle, 'sample.js');
         $this->assertStringContainsString('sample.js', $unoptimizedUrl);
