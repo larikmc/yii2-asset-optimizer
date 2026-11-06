@@ -120,7 +120,9 @@ class AssetOptimizerController extends Controller
         if ($this->app === 'backend') {
             if (Yii::getAlias('@backend', false) !== false) {
                 $this->runtimePath = '@backend/runtime/asset-optimizer';
-                $this->optimizedBasePath = '@backend/web/optimized';
+                $this->optimizedBasePath = Yii::getAlias('@frontend/web', false) !== false
+                    ? '@frontend/web/optimized'
+                    : '@backend/web/optimized';
                 $this->optimizedBaseUrl = '/optimized';
             }
         } else {
