@@ -66,9 +66,10 @@ class AssetScanner
     public function scan(): array
     {
         $discovered = [];
+        $resolvedBundles = $this->resolveAllBundles();
 
-        // 1. Scan configured AssetBundles
-        foreach ($this->bundles as $bundleClass) {
+        // 1. Scan configured AssetBundles and their dependencies
+        foreach ($resolvedBundles as $bundleClass) {
             if ($this->isBundleExcluded($bundleClass)) {
                 continue;
             }
@@ -113,6 +114,57 @@ class AssetScanner
         }
 
         return $discovered;
+    }
+
+    /**
+     * Resolves all bundles including their dependencies recursively in topological order.
+     *
+     * @return string[]
+     */
+    public function resolveAllBundles(): array
+    {
+        $all = [];
+        $visited = [];
+
+        foreach ($this->bundles as $bundleClass) {
+            $this->collectBundleAndDependencies($bundleClass, $all, $visited);
+        }
+
+        return $all;
+    }
+
+    /**
+     * @param string $bundleClass
+     * @param string[] $all
+     * @param array<string, bool> $visited
+     */
+    private function collectBundleAndDependencies(string $bundleClass, array &$all, array &$visited): void
+    {
+        if (isset($visited[$bundleClass]) || $this->isBundleExcluded($bundleClass)) {
+            return;
+        }
+        $visited[$bundleClass] = true;
+
+        if (!class_exists($bundleClass)) {
+            return;
+        }
+
+        try {
+            /** @var AssetBundle $bundle */
+            $bundle = Yii::createObject($bundleClass);
+
+            if (!empty($bundle->depends) && is_array($bundle->depends)) {
+                foreach ($bundle->depends as $depClass) {
+                    if (is_string($depClass)) {
+                        $this->collectBundleAndDependencies($depClass, $all, $visited);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Bundle could not be instantiated; keep the class to be reported or handled
+        }
+
+        $all[] = $bundleClass;
     }
 
     /**

@@ -404,6 +404,37 @@ class AssetOptimizerController extends Controller
     {
         $bundles = $this->bundles;
         $extraFiles = $this->extraFiles;
+        $excludedBundles = $this->excludedBundles;
+        $excludedFiles = $this->excludedFiles;
+
+        // Auto-detect excluded bundles and files from application configuration if available
+        $appConfigDir = Yii::getAlias("@{$this->app}/config", false);
+        if ($appConfigDir !== false) {
+            $webConfigFile = $appConfigDir . '/main.php';
+            if (file_exists($webConfigFile)) {
+                try {
+                    $webConfig = @require $webConfigFile;
+                    $am = $webConfig['components']['assetManager'] ?? [];
+                    if (is_array($am)) {
+                        if (!empty($am['excludedBundles']) && is_array($am['excludedBundles'])) {
+                            $excludedBundles = array_unique(array_merge($excludedBundles, $am['excludedBundles']));
+                        }
+                        if (!empty($am['excludedFiles']) && is_array($am['excludedFiles'])) {
+                            $excludedFiles = array_unique(array_merge($excludedFiles, $am['excludedFiles']));
+                        }
+                        if (!empty($am['bundles']) && is_array($am['bundles'])) {
+                            foreach ($am['bundles'] as $bClass => $bVal) {
+                                if ($bVal === false && !in_array($bClass, $excludedBundles, true)) {
+                                    $excludedBundles[] = $bClass;
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore if web config relies on web-only context
+                }
+            }
+        }
 
         // Auto-detect bundles if none configured
         if (empty($bundles)) {
@@ -413,8 +444,8 @@ class AssetOptimizerController extends Controller
         return new AssetScanner(
             $bundles,
             $extraFiles,
-            $this->excludedBundles,
-            $this->excludedFiles
+            $excludedBundles,
+            $excludedFiles
         );
     }
 
