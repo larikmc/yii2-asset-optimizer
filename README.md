@@ -1,10 +1,10 @@
 # Yii2 Asset Optimizer
 
-[![Latest Stable Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/larikmc/yii2-asset-optimizer/releases)
+[![Latest Stable Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/larikmc/yii2-asset-optimizer/releases)
 [![Yii2](https://img.shields.io/badge/Yii2-2.0.x-green.svg)](https://www.yiiframework.com/)
 [![PHP](https://img.shields.io/badge/PHP-%3E%3D8.0-777bb4.svg)](https://www.php.net/)
 [![License](https://img.shields.io/badge/license-MIT-informational.svg)](LICENSE.md)
-[![Tests](https://img.shields.io/badge/PHPUnit-21%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/PHPUnit-27%20passed-brightgreen.svg)](tests/)
 [![esbuild](https://img.shields.io/badge/powered%20by-esbuild-orange.svg)](https://esbuild.github.io/)
 
 Универсальный высокопроизводительный Composer-пакет для автоматической оптимизации, минификации и версионирования CSS и JavaScript в проектах на **Yii2 Framework** на базе ультрабыстрого компилятора **esbuild**.
@@ -23,6 +23,7 @@
   - [1. Yii2 Basic](#1-yii2-basic)
   - [2. Yii2 Advanced (Frontend + Backend)](#2-yii2-advanced-frontend--backend)
   - [3. Настройка Nginx](#3-настройка-nginx)
+  - [4. Режим объединения всех CSS и JS (Combined Mode)](#4-режим-объединения-всех-css-и-js-combined-mode)
 - [Консольные команды (CLI)](#консольные-команды-cli)
   - [Сборка ресурсов (`build`)](#1-сборка-ресурсов-build)
   - [Режим отслеживания (`watch`)](#2-режим-отслеживания-watch)
@@ -68,6 +69,7 @@
 
 ## Ключевые возможности
 
+- 📦 **Склейка всех CSS и JS в единые файлы (`combineAssets`)**: Возможность объединить абсолютно все стили сайта в один общий файл (`all.<hash>.min.css`), а все скрипты — в один общий файл (`all.<hash>.min.js`) с автоматическим выделением критических inline-скриптов шапки (`all-head.<hash>.min.js`). Без правок представлений и без лишних HTTP-запросов.
 - ⚡ **Ультрабыстрая компиляция через esbuild**: Сборка CSS и JS занимает доли секунды благодаря нативному движку на Go.
 - 🔒 **Иммутабельное кэширование**: Каждый выходной файл получает уникальное имя с 12-символьным SHA-256 хешем содержимого (например, `site.a1b2c3d4e5f6.min.css`). Браузеры и CDN могут кэшировать файлы навечно (`Cache-Control: immutable`).
 - 🛡️ **Безопасная изоляция JavaScript**: Традиционные скрипты минифицируются **без склейки в ES-модули**, гарантируя сохранение глобального контекста `window`, плагинов jQuery, событий ActiveForm и работы PJAX.
@@ -167,10 +169,15 @@ npm install --save-dev esbuild
 | Параметр | По умолчанию | Описание |
 |---|---|---|
 | `enabled` | `true` | Включение/отключение резолва оптимизированных ресурсов. При `false` работает стандартный AssetManager Yii2. |
+| `combineAssets` | `false` | Режим склейки всех CSS и JS в единые файлы (`all.<hash>.min.css` и `all.<hash>.min.js`). Автоматически отключает раздельные теги скриптов и стилей и подключает единственный объединённый бандл. |
+| `combinedBundleName` | `'all'` | Базовое имя выходных объединённых файлов (`all.min.css`, `all.min.js`). |
+| `uncombinedBundles` | `[]` | Список классов AssetBundle, которые не нужно склеивать в общий файл даже при включённом `combineAssets`. |
 | `optimizerRuntimePath` | `'@runtime/asset-optimizer'` | Каталог для манифестов и кэша сборки. |
 | `optimizedBaseUrl` | `'@web/optimized'` | Публичный базовый URL оптимизированных ассетов. |
 | `optimizedBasePath` | `'@webroot/optimized'` | Файловая директория, куда складываются готовые ассеты. |
-| `enableApcu` | `true` | Использовать ли память APCu для кэширования активного манифеста. |
+| `enableApcu` | `true` | Использовать ли память APCu для кэширования разобранного манифеста активного релиза. |
+| `versionCheckInterval` | `0` | Интервал (в секундах) проверки актуальности релиза в APCu. Значение `0` (рекомендуется) выполняет одно сверхлёгкое чтение `current.version` (25 байт, ~0.08 мс) за HTTP-запрос, обеспечивая мгновенное обновление версии между CLI и PHP-FPM без перезапуска процессов. |
+| `bypassSourcePathPublish` | `true` | Если `true`, проверяет бандлы с `$sourcePath`: если все CSS/JS файлы бандла уже скомпилированы и присутствуют в активном манифесте, стандартное копирование папки в `web/assets/<hash>/` пропускается, а `$bundle->basePath` и `$bundle->baseUrl` переключаются на оптимизированные пути. |
 | `excludedBundles` | `[]` | Массив классов AssetBundle, которые нужно исключить из оптимизации. |
 | `excludedFiles` | `[]` | Массив масок файлов (например, `['*chart.js']`), исключаемых из оптимизации. |
 
@@ -180,19 +187,54 @@ npm install --save-dev esbuild
 
 Поскольку скомпилированные ассеты содержат SHA-256 хеш содержимого в имени файла, настройте для них максимальное кэширование на стороне веб-сервера.
 
+> [!IMPORTANT]
+> **Не используйте директиву `expires` совместно с `add_header Cache-Control`**, так как `expires` дублирует заголовок `Cache-Control` с конфликтующим значением. Используйте исключительно директиву `add_header` с флагом `always`:
+
 Добавьте в секцию `server` конфигурации Nginx (до основных regex-локаций):
 
 ```nginx
 # Оптимизированные ассеты: долгосрочное иммутабельное кэширование
 location ^~ /optimized/ {
-    expires 365d;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     access_log off;
     try_files $uri =404;
 }
 ```
 
-Модификатор `^~` останавливает проверку регулярных выражений, обеспечивая мгновенную отдачу статики напрямую через Nginx.
+Модификатор `^~` останавливает проверку регулярных выражений, обеспечивая мгновенную отдачу статики напрямую через Nginx без проксирования в PHP-FPM.
+
+---
+
+### 4. Режим объединения всех CSS и JS (Combined Mode)
+
+По умолчанию оптимизатор сжимает и версионирует каждый файл раздельно, сохраняя порядок подключения.
+Если вам требуется максимальная оптимизация сетевых запросов — **сжать все CSS в один общий файл и все JS в один общий файл** — включите режим `combineAssets`:
+
+#### Включение в веб-конфигурации:
+```php
+'components' => [
+    'assetManager' => [
+        'class' => \larikmc\assetoptimizer\components\OptimizingAssetManager::class,
+        'enabled' => true,
+        'combineAssets' => true, // Включает склейку всех CSS и JS в один общий файл
+    ],
+],
+```
+
+#### Запуск сборки:
+```bash
+# Флаг --combine (-c) активирует создание объединённых бандлов:
+php yii asset-optimizer/build --combine
+```
+
+> **Совет:** Консольная команда `asset-optimizer/build` автоматически считывает параметр `combineAssets` из конфигурации вашего веб-приложения (`frontend/config/main.php` или `config/web.php`). Если параметр задан в конфиге, указывать флаг `--combine` необязательно!
+
+#### Как это работает под капотом:
+1. **Топологический порядок**: Стили и скрипты объединяются в строгом порядке дерева зависимостей `$depends` фреймворка Yii2.
+2. **Связанные ресурсы в CSS**: Все локальные директивы `@import` инлайнятся, а относительные ссылки на шрифты и изображения автоматически пересчитываются и копируются в `/optimized/assets/`.
+3. **Безопасная склейка JS**: При объединении скрипты разделяются безопасными точками с запятой (`;\n`), исключая синтаксические ошибки из-за ASI (Automatic Semicolon Insertion).
+4. **Специальные скрипты шапки (`POS_HEAD`)**: Если в бандлах зарегистрированы критические скрипты для шапки сайта (например, переключатель тёмной/светлой темы с `View::POS_HEAD`), оптимизатор автоматически выносит их в компактный отдельный файл `all-head.<hash>.min.js`, предотвращая мерцание стилей страницы (FOUC).
+5. **Абсолютно прозрачно для представлений**: Вам не нужно переписывать ни один виджет или представление. В runtime компонент `OptimizingAssetManager` очищает индивидуальные пути у входящих в бандл файлов и динамически подмешивает единый синтетический `CombinedAssetBundle`. Браузер получает ровно один `<link>` для всех стилей и ровно один `<script>` для всех скриптов.
 
 ---
 
@@ -207,6 +249,9 @@ location ^~ /optimized/ {
 ```bash
 # Для приложения по умолчанию (frontend):
 php yii asset-optimizer/build
+
+# Сборка со склейкой всех CSS и JS в общий файл:
+php yii asset-optimizer/build --combine # или -c
 
 # Для бэкенда в Yii2 Advanced:
 php yii asset-optimizer/build --app=backend
@@ -259,23 +304,18 @@ php yii asset-optimizer/stats --json
 **Пример вывода:**
 ```text
 --- [Asset Optimizer] Asset Statistics ---
-Active Build:    20261106-224559-cc36a3bb
-Created:         2026-11-06 22:45:59
-Total Files:     10
-Original Size:   714.39 KB
-Optimized Size:  353.16 KB
-Estimated Gzip:  123.21 KB
-Savings:         50.56%
+Active Build:    20261112-182115-62f21080
+Created:         2026-11-12 18:21:15
+Total Files:     14
+Original Size:   1.72 MB
+Optimized Size:  875.28 KB
+Estimated Gzip:  242.15 KB
+Savings:         50.33%
 
 Assets Breakdown:
-  yii\web\JqueryAsset:jquery.js                      278.63 KB   85.83 KB   (-69.2%)
-  yii\web\YiiAsset:yii.js                            20.49 KB    5.61 KB    (-72.6%)
-  frontend\assets\AppAsset:css/bootstrap-icons.min.css 83.86 KB 81.9 KB     (-2.3%)
-  frontend\assets\AppAsset:css/playlog.css           86.54 KB    60.66 KB   (-29.9%)
-  frontend\assets\AppAsset:js/playlog.js             151.2 KB    89.07 KB   (-41.1%)
-  yii\widgets\ActiveFormAsset:yii.activeForm.js      36.29 KB    9.77 KB    (-73.1%)
-  yii\validators\ValidationAsset:yii.validation.js   17.04 KB    6.33 KB    (-62.8%)
-  yii\captcha\CaptchaAsset:yii.captcha.js            2.01 KB     1.12 KB    (-44.3%)
+  all.min.css                                        239.58 KB
+  all.min.js                                         125.27 KB
+  all-head.min.js                                    948 B
 ```
 
 ---
@@ -386,6 +426,7 @@ vendor/bin/phpunit
 - Механизм кэширования `ManifestRegistry` (Static array + APCu + JSON).
 - Логику отката (`rollback`) и очистки (`prune`).
 - Интеграцию с `OptimizingAssetManager`.
+- Склейку всех стилей и скриптов в единые файлы (`CombinedAssetBundle`).
 
 ---
 

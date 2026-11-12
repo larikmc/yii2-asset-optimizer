@@ -15,11 +15,57 @@ class EsbuildRunner
     private ?string $cachedVersion = null;
 
     /**
-     * @param string|null $esbuildBin Custom path to esbuild binary or command (e.g. "npx esbuild" or "/usr/local/bin/esbuild").
+     * @var string|null Optional custom path to Node.js installation directory.
      */
-    public function __construct(?string $esbuildBin = null)
+    public ?string $nodePath = null;
+
+    /**
+     * @param string|null $esbuildBin Custom path to esbuild binary or command (e.g. "npx esbuild" or "/usr/local/bin/esbuild").
+     * @param string|null $nodePath Optional path to Node.js directory.
+     */
+    public function __construct(?string $esbuildBin = null, ?string $nodePath = null)
     {
         $this->esbuildBin = $esbuildBin;
+        $this->nodePath = $nodePath;
+    }
+
+    /**
+     * Resolves the directory containing Node.js executables (node, npx).
+     */
+    public function resolveNodePath(): ?string
+    {
+        if ($this->nodePath !== null && is_dir($this->nodePath)) {
+            return $this->nodePath;
+        }
+
+        // 1. Check environment variable
+        $envNode = getenv('NODE_PATH') ?: ($_ENV['NODE_PATH'] ?? null);
+        if ($envNode && is_dir($envNode)) {
+            return $envNode;
+        }
+
+        // 2. Check Yii application params
+        if (class_exists('Yii', false) && isset(\Yii::$app->params['assetOptimizer']['nodePath'])) {
+            $paramPath = (string) \Yii::$app->params['assetOptimizer']['nodePath'];
+            if (is_dir($paramPath)) {
+                return $paramPath;
+            }
+        }
+
+        // 3. Check common default system locations on Windows
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $commonWindowsPaths = [
+                'C:\\Program Files\\nodejs',
+                'C:\\Program Files (x86)\\nodejs',
+            ];
+            foreach ($commonWindowsPaths as $p) {
+                if (is_dir($p)) {
+                    return $p;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -31,22 +77,41 @@ class EsbuildRunner
             return $this->esbuildBin;
         }
 
-        // 1. Check local node_modules in project
-        $localPaths = [
-            dirname(__DIR__, 2) . '/node_modules/.bin/esbuild.cmd',
-            dirname(__DIR__, 2) . '/node_modules/.bin/esbuild',
-            'D:/DevTools/nodejs/node-v24.19.0-win-x64/npx.cmd esbuild',
-        ];
+        $isWindows = DIRECTORY_SEPARATOR === '\\';
 
-        foreach ($localPaths as $path) {
-            $checkPath = explode(' ', $path)[0];
-            if (file_exists($checkPath)) {
-                return $this->esbuildBin = $path;
+        // 1. Check local node_modules in project and parent directories
+        $candidateDirs = [
+            dirname(__DIR__, 2), // package root
+        ];
+        if (class_exists('Yii', false) && \Yii::$app !== null) {
+            $basePath = \Yii::$app->getBasePath();
+            if ($basePath) {
+                $candidateDirs[] = $basePath;
+                $candidateDirs[] = dirname($basePath);
             }
         }
 
-        // 2. Check if esbuild or npx is available in PATH
-        $isWindows = DIRECTORY_SEPARATOR === '\\';
+        foreach ($candidateDirs as $dir) {
+            $localBin = $dir . '/node_modules/.bin/esbuild' . ($isWindows ? '.cmd' : '');
+            if (file_exists($localBin)) {
+                return $this->esbuildBin = $localBin;
+            }
+        }
+
+        // 2. Check resolved custom node path if configured
+        $nodeDir = $this->resolveNodePath();
+        if ($nodeDir !== null) {
+            $nodeNpx = $nodeDir . DIRECTORY_SEPARATOR . ($isWindows ? 'npx.cmd' : 'npx');
+            if (file_exists($nodeNpx)) {
+                return $this->esbuildBin = escapeshellarg($nodeNpx) . ' esbuild';
+            }
+            $nodeEsbuild = $nodeDir . DIRECTORY_SEPARATOR . ($isWindows ? 'esbuild.cmd' : 'esbuild');
+            if (file_exists($nodeEsbuild)) {
+                return $this->esbuildBin = escapeshellarg($nodeEsbuild);
+            }
+        }
+
+        // 3. Check if esbuild is available in system PATH
         $testCmd = $isWindows ? 'where esbuild 2>nul' : 'which esbuild 2>/dev/null';
         $output = @shell_exec($testCmd);
         if ($output !== null && trim($output) !== '') {
@@ -54,7 +119,7 @@ class EsbuildRunner
             return $this->esbuildBin = trim($lines[0]);
         }
 
-        // 3. Fallback to npx
+        // 4. Fallback to npx in system PATH
         $npxCmd = $isWindows ? 'where npx 2>nul' : 'which npx 2>/dev/null';
         $npxOutput = @shell_exec($npxCmd);
         if ($npxOutput !== null && trim($npxOutput) !== '') {
@@ -182,18 +247,17 @@ class EsbuildRunner
             2 => ['pipe', 'w'],
         ];
 
-        // Ensure PATH includes known node directory if on Windows
+        // Prepend custom or detected Node directory to PATH if available
         $env = getenv();
         if (!is_array($env)) {
             $env = [];
         }
-        if (DIRECTORY_SEPARATOR === '\\') {
-            $nodeDir = 'D:\\DevTools\\nodejs\\node-v24.19.0-win-x64';
-            if (is_dir($nodeDir)) {
-                $currentPath = $env['PATH'] ?? (getenv('PATH') ?: '');
-                if (!str_contains($currentPath, $nodeDir)) {
-                    $env['PATH'] = $nodeDir . ';' . $currentPath;
-                }
+        $nodeDir = $this->resolveNodePath();
+        if ($nodeDir !== null && is_dir($nodeDir)) {
+            $currentPath = $env['PATH'] ?? (getenv('PATH') ?: '');
+            $delimiter = DIRECTORY_SEPARATOR === '\\' ? ';' : ':';
+            if (!str_contains($currentPath, $nodeDir)) {
+                $env['PATH'] = $nodeDir . $delimiter . $currentPath;
             }
         }
 

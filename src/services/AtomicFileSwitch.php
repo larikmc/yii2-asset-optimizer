@@ -34,38 +34,27 @@ class AtomicFileSwitch
             throw new RuntimeException("Failed to write full content to temporary file: {$tempFile}");
         }
 
-        // Try direct rename first (atomic on Linux and modern Windows on same volume)
+        // Try direct atomic rename first (atomic on Linux and modern Windows NTFS on same volume)
         if (@rename($tempFile, $targetFile)) {
             return;
         }
 
-        // Fallback for Windows file locks / permission edges
-        $backupFile = $dir . DIRECTORY_SEPARATOR . '.' . basename($targetFile) . '.bak.' . bin2hex(random_bytes(6));
+        // Retry loop for transient file sharing/locking contention (e.g. on Windows NTFS)
+        $maxRetries = 10;
+        $retryDelayUs = 25000; // 25 milliseconds
 
-        if (file_exists($targetFile)) {
-            if (!@rename($targetFile, $backupFile)) {
-                // If backup rename also failed, attempt direct copy with lock
-                if (@copy($tempFile, $targetFile)) {
-                    @unlink($tempFile);
-                    return;
-                }
-                @unlink($tempFile);
-                throw new RuntimeException("Cannot replace existing file: {$targetFile}");
+        for ($i = 0; $i < $maxRetries; $i++) {
+            usleep($retryDelayUs);
+            if (@rename($tempFile, $targetFile)) {
+                return;
             }
         }
 
-        if (!@rename($tempFile, $targetFile)) {
-            // Restore from backup if possible
-            if (file_exists($backupFile)) {
-                @rename($backupFile, $targetFile);
-            }
-            @unlink($tempFile);
-            throw new RuntimeException("Atomic rename failed for {$targetFile}");
-        }
-
-        if (file_exists($backupFile)) {
-            @unlink($backupFile);
-        }
+        // If replacement failed, clean up temp file and throw exception.
+        // Guarantees that $targetFile was NEVER deleted or moved away,
+        // so readers continue to access the previous valid version.
+        @unlink($tempFile);
+        throw new RuntimeException("Atomic replacement failed for target file: {$targetFile} after {$maxRetries} retries.");
     }
 
     /**

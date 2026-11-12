@@ -16,6 +16,7 @@ class ManifestRegistry
     private string $runtimePath;
     private bool $enableApcu;
     private string $apcuPrefix;
+    private int $versionCheckInterval;
 
     /**
      * In-memory cache for current request lifecycle.
@@ -30,12 +31,18 @@ class ManifestRegistry
      * @param string|null $runtimePath Base directory for asset-optimizer runtime files. Defaults to "@runtime/asset-optimizer".
      * @param bool|null $enableApcu Whether to use APCu caching. Defaults to true if APCu is available.
      * @param string $apcuPrefix Prefix for APCu cache keys.
+     * @param int $versionCheckInterval Interval in seconds to cache active build ID in APCu (0 = check on every request for instant sync).
      */
-    public function __construct(?string $runtimePath = null, ?bool $enableApcu = null, string $apcuPrefix = 'asset_optimizer:')
-    {
+    public function __construct(
+        ?string $runtimePath = null,
+        ?bool $enableApcu = null,
+        string $apcuPrefix = 'asset_optimizer:',
+        int $versionCheckInterval = 0
+    ) {
         $this->runtimePath = Yii::getAlias($runtimePath ?? '@runtime/asset-optimizer');
         $this->enableApcu = $enableApcu ?? (extension_loaded('apcu') && (bool) ini_get('apc.enabled'));
         $this->apcuPrefix = $apcuPrefix;
+        $this->versionCheckInterval = max(0, $versionCheckInterval);
     }
 
     /**
@@ -93,8 +100,8 @@ class ManifestRegistry
 
         $apcuKey = $this->apcuPrefix . 'active_build';
 
-        // Check APCu
-        if ($this->enableApcu) {
+        // Check APCu only if an explicit interval > 0 was configured
+        if ($this->enableApcu && $this->versionCheckInterval > 0) {
             $success = false;
             $cachedId = apcu_fetch($apcuKey, $success);
             if ($success && is_string($cachedId) && $cachedId !== '') {
@@ -102,7 +109,7 @@ class ManifestRegistry
             }
         }
 
-        // Read pointer file
+        // Read pointer file (lightweight 25-byte read, cached in $activeBuildIdMemory for the request)
         $versionFile = $this->runtimePath . DIRECTORY_SEPARATOR . 'current.version';
         if (!file_exists($versionFile)) {
             // Check fallback current.json
@@ -114,8 +121,8 @@ class ManifestRegistry
                         $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
                         if (isset($data['buildId']) && is_string($data['buildId'])) {
                             $this->activeBuildIdMemory = $data['buildId'];
-                            if ($this->enableApcu) {
-                                apcu_store($apcuKey, $this->activeBuildIdMemory, 300);
+                            if ($this->enableApcu && $this->versionCheckInterval > 0) {
+                                apcu_store($apcuKey, $this->activeBuildIdMemory, $this->versionCheckInterval);
                             }
                             return $this->activeBuildIdMemory;
                         }
@@ -133,8 +140,8 @@ class ManifestRegistry
         }
 
         $this->activeBuildIdMemory = $buildId;
-        if ($this->enableApcu) {
-            apcu_store($apcuKey, $buildId, 300);
+        if ($this->enableApcu && $this->versionCheckInterval > 0) {
+            apcu_store($apcuKey, $buildId, $this->versionCheckInterval);
         }
 
         return $this->activeBuildIdMemory;

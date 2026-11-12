@@ -80,4 +80,9 @@ new \yii\console\Application([
     'id' => 'asset-optimizer-test',
     'basePath' => __DIR__,
     'runtimePath' => __DIR__ . '/runtime',
+    'params' => [
+        'assetOptimizer' => [
+            'nodePath' => getenv('NODE_PATH') ?: (is_dir('D:/DevTools/nodejs/node-v24.19.0-win-x64') ? 'D:/DevTools/nodejs/node-v24.19.0-win-x64' : null),
+        ],
+    ],
 ]);

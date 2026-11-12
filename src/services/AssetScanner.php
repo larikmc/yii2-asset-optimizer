@@ -110,6 +110,7 @@ class AssetScanner
                 'bundleClass' => '',
                 'sourceRelativePath' => $relPath,
                 'sourceAbsolutePath' => $resolved,
+                'position' => \yii\web\View::POS_END,
             ];
         }
 
@@ -226,7 +227,9 @@ class AssetScanner
         }
 
         // Process JS
+        $defaultJsPos = $bundle->jsOptions['position'] ?? \yii\web\View::POS_END;
         foreach ($bundle->js as $jsItem) {
+            $itemPos = is_array($jsItem) && isset($jsItem['position']) ? $jsItem['position'] : $defaultJsPos;
             $file = is_array($jsItem) ? array_shift($jsItem) : $jsItem;
             if ($file === null || !Url::isRelative($file) || str_starts_with($file, '//')) {
                 continue;
@@ -248,6 +251,7 @@ class AssetScanner
                 'bundleClass' => $bundleClass,
                 'sourceRelativePath' => $cleanFile,
                 'sourceAbsolutePath' => $absPath,
+                'position' => $itemPos,
             ];
         }
 

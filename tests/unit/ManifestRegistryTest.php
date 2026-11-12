@@ -62,6 +62,38 @@ class ManifestRegistryTest extends TestCase
         $this->assertNull($registry->resolveUrl('any:key'));
     }
 
+    public function testInstantVersionSwitchBetweenRequests(): void
+    {
+        // Build 1
+        $build1 = 'build-1';
+        $manifest1 = new Manifest($build1);
+        $asset1 = new AssetRecord();
+        $asset1->key = 'bundle:app.js';
+        $asset1->url = '/optimized/app.111111111111.min.js';
+        $manifest1->addAsset($asset1);
+        AtomicFileSwitch::atomicWrite($this->runtimePath . "/manifests/manifest-{$build1}.json", $manifest1->toJson());
+        AtomicFileSwitch::switchVersion($this->runtimePath . '/current.version', $build1);
+
+        $registry = new ManifestRegistry($this->runtimePath, false, 'test:', 0);
+        $this->assertSame($build1, $registry->getActiveBuildId());
+        $this->assertSame('/optimized/app.111111111111.min.js', $registry->resolveUrl('bundle:app.js'));
+
+        // Switch to Build 2
+        $build2 = 'build-2';
+        $manifest2 = new Manifest($build2);
+        $asset2 = new AssetRecord();
+        $asset2->key = 'bundle:app.js';
+        $asset2->url = '/optimized/app.222222222222.min.js';
+        $manifest2->addAsset($asset2);
+        AtomicFileSwitch::atomicWrite($this->runtimePath . "/manifests/manifest-{$build2}.json", $manifest2->toJson());
+        AtomicFileSwitch::switchVersion($this->runtimePath . '/current.version', $build2);
+
+        // New request (new registry instance or invalidated request)
+        $newRequestRegistry = new ManifestRegistry($this->runtimePath, false, 'test:', 0);
+        $this->assertSame($build2, $newRequestRegistry->getActiveBuildId());
+        $this->assertSame('/optimized/app.222222222222.min.js', $newRequestRegistry->resolveUrl('bundle:app.js'));
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

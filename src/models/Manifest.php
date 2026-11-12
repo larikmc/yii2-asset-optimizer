@@ -47,6 +47,20 @@ class Manifest
      */
     public array $dependencies = [];
 
+    /**
+     * Combined assets configuration and records if combineAssets was enabled.
+     *
+     * @var array{
+     *     enabled: bool,
+     *     css?: array<string, mixed>,
+     *     js?: array<string, mixed>,
+     *     jsHead?: array<string, mixed>,
+     *     bundles: string[],
+     *     assets: string[]
+     * }|null
+     */
+    public ?array $combined = null;
+
     public function __construct(string $buildId = '')
     {
         $this->buildId = $buildId !== '' ? $buildId : self::generateBuildId();
@@ -113,7 +127,7 @@ class Manifest
             $assetsArray[$key] = $asset->toArray();
         }
 
-        return [
+        $result = [
             'schemaVersion' => $this->schemaVersion,
             'buildId' => $this->buildId,
             'createdAt' => $this->createdAt,
@@ -122,6 +136,12 @@ class Manifest
             'assets' => $assetsArray,
             'dependencies' => array_values(array_unique($this->dependencies)),
         ];
+
+        if ($this->combined !== null) {
+            $result['combined'] = $this->combined;
+        }
+
+        return $result;
     }
 
     /**
@@ -190,6 +210,49 @@ class Manifest
             $manifest->dependencies = array_values(array_map('strval', $data['dependencies']));
         }
 
+        if (isset($data['combined']) && is_array($data['combined'])) {
+            $manifest->combined = $data['combined'];
+        }
+
         return $manifest;
+    }
+
+    public function hasCombinedAssets(): bool
+    {
+        return !empty($this->combined['enabled']);
+    }
+
+    public function getCombinedCss(): ?AssetRecord
+    {
+        if (isset($this->combined['css']) && is_array($this->combined['css'])) {
+            return AssetRecord::fromArray($this->combined['css']);
+        }
+        return null;
+    }
+
+    public function getCombinedJs(): ?AssetRecord
+    {
+        if (isset($this->combined['js']) && is_array($this->combined['js'])) {
+            return AssetRecord::fromArray($this->combined['js']);
+        }
+        return null;
+    }
+
+    public function getCombinedJsHead(): ?AssetRecord
+    {
+        if (isset($this->combined['jsHead']) && is_array($this->combined['jsHead'])) {
+            return AssetRecord::fromArray($this->combined['jsHead']);
+        }
+        return null;
+    }
+
+    public function isAssetCombined(string $key): bool
+    {
+        return !empty($this->combined['assets']) && in_array($key, $this->combined['assets'], true);
+    }
+
+    public function isBundleCombined(string $bundleClass): bool
+    {
+        return !empty($this->combined['bundles']) && in_array($bundleClass, $this->combined['bundles'], true);
     }
 }

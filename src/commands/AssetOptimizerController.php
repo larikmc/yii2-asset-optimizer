@@ -36,6 +36,11 @@ class AssetOptimizerController extends Controller
     public $full = 0;
 
     /**
+     * @var int|null Combine all CSS and JS into single common bundles (1 or 0). Defaults to web configuration.
+     */
+    public $combine = null;
+
+    /**
      * @var int Output statistics in JSON format (1 or 0).
      */
     public $json = 0;
@@ -141,7 +146,7 @@ class AssetOptimizerController extends Controller
     {
         $common = ['app'];
         return match ($actionID) {
-            'build' => array_merge($common, ['full']),
+            'build' => array_merge($common, ['full', 'combine']),
             'stats' => array_merge($common, ['json']),
             'prune' => array_merge($common, ['keep', 'days', 'dryRun']),
             default => $common,
@@ -152,6 +157,7 @@ class AssetOptimizerController extends Controller
     {
         return [
             'f' => 'full',
+            'c' => 'combine',
             'j' => 'json',
             'k' => 'keep',
             'd' => 'days',
@@ -171,6 +177,18 @@ class AssetOptimizerController extends Controller
 
             $this->stdout("✓ Build completed successfully!\n", Console::FG_GREEN, Console::BOLD);
             $this->stdout("  Build ID:       {$result['buildId']}\n");
+            if (!empty($result['combined']['enabled'])) {
+                $this->stdout("  Combined Mode:  ACTIVE (all CSS & JS merged)\n", Console::FG_CYAN, Console::BOLD);
+                if (!empty($result['combined']['css'])) {
+                    $this->stdout("  Combined CSS:   {$result['combined']['css']}\n");
+                }
+                if (!empty($result['combined']['js'])) {
+                    $this->stdout("  Combined JS:    {$result['combined']['js']}\n");
+                }
+                if (!empty($result['combined']['jsHead'])) {
+                    $this->stdout("  Combined Head:  {$result['combined']['jsHead']}\n");
+                }
+            }
             $this->stdout("  Total files:    {$result['totalFiles']}\n");
             $this->stdout("  Processed:      {$result['processedFiles']}\n");
             $this->stdout("  Reused cached:  {$result['reusedFiles']}\n");
@@ -395,7 +413,7 @@ class AssetOptimizerController extends Controller
         }
 
         $this->stdout("\nRecommended Nginx configuration for /optimized/:\n", Console::FG_CYAN);
-        $this->stdout("location /optimized/ {\n    expires 365d;\n    add_header Cache-Control \"public, max-age=31536000, immutable\";\n    access_log off;\n    try_files \$uri =404;\n}\n", Console::FG_GREY);
+        $this->stdout("location ^~ /optimized/ {\n    add_header Cache-Control \"public, max-age=31536000, immutable\" always;\n    access_log off;\n    try_files \$uri =404;\n}\n", Console::FG_GREY);
 
         return $hasErrors ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
     }
@@ -451,7 +469,7 @@ class AssetOptimizerController extends Controller
 
     private function createAssetBuilder(): AssetBuilder
     {
-        return new AssetBuilder(
+        $builder = new AssetBuilder(
             $this->createEsbuildRunner(),
             $this->createAssetScanner(),
             $this->createManifestRegistry(),
@@ -459,6 +477,30 @@ class AssetOptimizerController extends Controller
             $this->optimizedBasePath,
             $this->optimizedBaseUrl
         );
+
+        $combine = $this->combine !== null ? (bool) $this->combine : $this->detectCombineSetting();
+        $builder->combineAssets = $combine;
+
+        return $builder;
+    }
+
+    private function detectCombineSetting(): bool
+    {
+        $appConfigDir = Yii::getAlias("@{$this->app}/config", false);
+        if ($appConfigDir !== false) {
+            $webConfigFile = $appConfigDir . '/main.php';
+            if (file_exists($webConfigFile)) {
+                try {
+                    $webConfig = @require $webConfigFile;
+                    $am = $webConfig['components']['assetManager'] ?? [];
+                    if (is_array($am) && !empty($am['combineAssets'])) {
+                        return (bool) $am['combineAssets'];
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+        }
+        return false;
     }
 
     private function createReleaseManager(): ReleaseManager
@@ -502,6 +544,9 @@ class AssetOptimizerController extends Controller
             }
         }
 
+        $candidates[] = 'yii\bootstrap5\BootstrapPluginAsset';
+        $candidates[] = 'yii\bootstrap4\BootstrapPluginAsset';
+        $candidates[] = 'yii\bootstrap\BootstrapPluginAsset';
         $candidates[] = 'yii\web\YiiAsset';
         $candidates[] = 'yii\widgets\ActiveFormAsset';
         $candidates[] = 'yii\validators\ValidationAsset';
