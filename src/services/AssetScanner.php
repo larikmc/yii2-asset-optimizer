@@ -335,6 +335,7 @@ class AssetScanner
         $candidates[] = 'yii\grid\GridViewAsset';
         $candidates[] = 'yii\widgets\PjaxAsset';
         $candidates[] = 'yii\captcha\CaptchaAsset';
+        $candidates[] = 'larikmc\lightbox\LightboxAsset';
 
         $existing = [];
         foreach ($candidates as $class) {
