@@ -122,6 +122,14 @@ class AssetOptimizerController extends Controller
             return false;
         }
 
+        if ($this->app === null) {
+            if (Yii::getAlias('@frontend', false) !== false) {
+                $this->app = 'frontend';
+            } elseif (Yii::getAlias('@app', false) !== false) {
+                $this->app = 'app';
+            }
+        }
+
         if ($this->app === 'backend') {
             if (Yii::getAlias('@backend', false) !== false) {
                 $this->runtimePath = '@backend/runtime/asset-optimizer';
@@ -425,8 +433,10 @@ class AssetOptimizerController extends Controller
         $excludedBundles = $this->excludedBundles;
         $excludedFiles = $this->excludedFiles;
 
+        $targetApp = $this->app ?: (Yii::getAlias('@frontend', false) !== false ? 'frontend' : 'app');
+
         // Auto-detect excluded bundles and files from application configuration if available
-        $appConfigDir = Yii::getAlias("@{$this->app}/config", false);
+        $appConfigDir = Yii::getAlias("@{$targetApp}/config", false);
         if ($appConfigDir !== false) {
             $webConfigFile = $appConfigDir . '/main.php';
             if (file_exists($webConfigFile)) {
@@ -486,7 +496,8 @@ class AssetOptimizerController extends Controller
 
     private function detectCombineSetting(): bool
     {
-        $appConfigDir = Yii::getAlias("@{$this->app}/config", false);
+        $targetApp = $this->app ?: (Yii::getAlias('@frontend', false) !== false ? 'frontend' : 'app');
+        $appConfigDir = Yii::getAlias("@{$targetApp}/config", false);
         if ($appConfigDir !== false) {
             $webConfigFile = $appConfigDir . '/main.php';
             if (file_exists($webConfigFile)) {
@@ -527,6 +538,7 @@ class AssetOptimizerController extends Controller
      */
     private function detectDefaultBundles(): array
     {
-        return AssetScanner::detectDefaultBundles($this->app);
+        $targetApp = $this->app ?: (Yii::getAlias('@frontend', false) !== false ? 'frontend' : 'app');
+        return AssetScanner::detectDefaultBundles($targetApp);
     }
 }
