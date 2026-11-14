@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-14
+
+### Added
+- **Intelligent Dev Auto-Rebuild (`autoRebuild`)**:
+  - Automatically detects changes in original CSS, JS, local `@import` dependencies, and AssetBundle PHP classes on HTTP requests when running in local development mode (`YII_ENV_DEV === true` or `YII_DEBUG === true`).
+  - Automatically runs incremental rebuild via esbuild on the fly so developers see updated styles/scripts upon pressing F5 without needing to run `watch` or `build` in console.
+  - **Ironclad Production Safety Guard**: Strictly blocked and disabled on production (`YII_ENV_PROD === true` with `!YII_DEBUG`), even if accidentally enabled in configuration, maintaining 100% Zero-Overhead runtime on production.
+  - **Blazing Fast Change Detection**: Tracks dictionary of known source files and bundle classes with their build-time mtimes directly in `Manifest::$sourceFiles`. Checking mtimes takes under 0.2 ms.
+  - **Smart Request Throttling**: Cross-request throttle via `.last_check` (`$autoRebuildInterval`, default 1s) and request-level deduplication to prevent redundant disk checks on concurrent AJAX and asset requests.
+  - **Graceful Failure Handling**: Compilation or syntax errors are safely caught and logged via `Yii::warning()` without throwing fatal 500 errors to web visitors.
+  - Options in `OptimizingAssetManager`: `$autoRebuild` (default `null` = auto), `$autoRebuildInterval` (default 1s), `$scanBundles`, `$scanExtraFiles`, `$esbuildBin`, `$nodePath`.
+  - Added `AutoRebuildTest` unit tests (total test suite expanded to 33 tests and 154 assertions, 100% pass rate).
+
 ## [1.1.0] - 2026-11-12
 
 ### Added

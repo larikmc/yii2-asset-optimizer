@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace larikmc\assetoptimizer\components;
 
 use larikmc\assetoptimizer\bundles\CombinedAssetBundle;
+use larikmc\assetoptimizer\services\AssetBuilder;
+use larikmc\assetoptimizer\services\AssetScanner;
+use larikmc\assetoptimizer\services\EsbuildRunner;
 use larikmc\assetoptimizer\services\ManifestRegistry;
 use Yii;
 use yii\helpers\Url;
@@ -74,6 +77,53 @@ class OptimizingAssetManager extends AssetManager
      */
     public bool $appendTimestampForUnoptimized = false;
 
+    /**
+     * @var string Base bundle name for combined assets when combineAssets is enabled. Defaults to "all".
+     */
+    public string $combinedBundleName = 'all';
+
+    /**
+     * @var string[] List of AssetBundle classes that should remain uncombined even when combineAssets is enabled.
+     */
+    public array $uncombinedBundles = [];
+
+    /**
+     * @var bool|null Whether to automatically check source file changes and rebuild assets on HTTP requests.
+     * When null, auto-enabled ONLY in development environments (YII_ENV_DEV === true or YII_DEBUG && !YII_ENV_PROD).
+     * STRICTLY disabled on production.
+     */
+    public ?bool $autoRebuild = null;
+
+    /**
+     * @var int Minimum seconds between change detection checks in autoRebuild mode. Defaults to 1 second.
+     */
+    public int $autoRebuildInterval = 1;
+
+    /**
+     * @var string[] Extra bundles to scan for auto-rebuild if not explicitly configured.
+     */
+    public array $scanBundles = [];
+
+    /**
+     * @var string[] Extra files to scan for auto-rebuild.
+     */
+    public array $scanExtraFiles = [];
+
+    /**
+     * @var string|null Optional custom path to esbuild executable.
+     */
+    public ?string $esbuildBin = null;
+
+    /**
+     * @var string|null Optional custom path to Node.js directory.
+     */
+    public ?string $nodePath = null;
+
+    /**
+     * @var bool Tracks whether auto-rebuild check was already performed in the current HTTP request.
+     */
+    private static bool $_autoRebuildCheckedInRequest = false;
+
     private ?ManifestRegistry $_manifestRegistry = null;
 
     public function init(): void
@@ -85,6 +135,10 @@ class OptimizingAssetManager extends AssetManager
             $this->appendTimestampForUnoptimized = (bool) $this->appendTimestamp;
             // Disable global appendTimestamp so yii\web\View does NOT issue filemtime() disk checks on HTTP requests
             $this->appendTimestamp = false;
+
+            if ($this->isAutoRebuildActive()) {
+                $this->checkAutoRebuild();
+            }
         }
     }
 
@@ -101,6 +155,10 @@ class OptimizingAssetManager extends AssetManager
     {
         if (!$this->enabled || $this->isBundleExcluded($name)) {
             return parent::loadBundle($name, $config, $publish);
+        }
+
+        if ($this->isAutoRebuildActive()) {
+            $this->checkAutoRebuild();
         }
 
         $manifest = $this->getManifestRegistry()->getActiveManifest();
@@ -456,5 +514,165 @@ class OptimizingAssetManager extends AssetManager
     public function setManifestRegistry(ManifestRegistry $registry): void
     {
         $this->_manifestRegistry = $registry;
+    }
+
+    /**
+     * Resets request-level state for unit tests.
+     */
+    public static function resetRequestState(): void
+    {
+        self::$_autoRebuildCheckedInRequest = false;
+    }
+
+    /**
+     * Determines whether auto-rebuild is active.
+     * Guaranteed to return false on production!
+     */
+    public function isAutoRebuildActive(): bool
+    {
+        // 1. Hard production guard: NEVER allow auto-rebuild in production!
+        $isProd = (defined('YII_ENV_PROD') && YII_ENV_PROD) || (defined('YII_ENV') && YII_ENV === 'prod');
+        $isDebug = defined('YII_DEBUG') && YII_DEBUG;
+
+        if ($isProd && !$isDebug) {
+            return false;
+        }
+
+        // 2. Explicit setting
+        if ($this->autoRebuild !== null) {
+            return (bool) $this->autoRebuild;
+        }
+
+        // 3. Default: active only in dev or debug environments
+        $isDev = (defined('YII_ENV_DEV') && YII_ENV_DEV) || (defined('YII_ENV') && YII_ENV === 'dev');
+        return $isDev || $isDebug;
+    }
+
+    /**
+     * Checks if source files have changed and rebuilds assets if needed (Dev mode only).
+     */
+    public function checkAutoRebuild(): void
+    {
+        if (self::$_autoRebuildCheckedInRequest) {
+            return;
+        }
+        self::$_autoRebuildCheckedInRequest = true;
+
+        if (!$this->isAutoRebuildActive() || !$this->enabled) {
+            return;
+        }
+
+        // Cross-request throttle via .last_check file
+        $runtimePath = Yii::getAlias($this->optimizerRuntimePath, false);
+        if ($runtimePath !== false && $runtimePath !== '') {
+            $checkFile = $runtimePath . DIRECTORY_SEPARATOR . '.last_check';
+            $now = time();
+            if (file_exists($checkFile)) {
+                $lastCheck = (int) @filemtime($checkFile);
+                if (($now - $lastCheck) < $this->autoRebuildInterval) {
+                    return;
+                }
+            }
+            if (!is_dir($runtimePath)) {
+                @mkdir($runtimePath, 0777, true);
+            }
+            @touch($checkFile);
+        }
+
+        $manifest = $this->getManifestRegistry()->getActiveManifest();
+        $needsRebuild = false;
+
+        if ($manifest === null) {
+            $needsRebuild = true;
+        } elseif ($manifest->hasChangedSourceFiles()) {
+            $needsRebuild = true;
+        } elseif (empty($manifest->sourceFiles)) {
+            // Legacy manifest: compare source file mtimes with manifest creation timestamp
+            $manifestTime = strtotime($manifest->createdAt);
+            if ($manifestTime > 0) {
+                try {
+                    $scanner = $this->createAssetScanner();
+                    $items = $scanner->scan();
+                    foreach ($items as $item) {
+                        if (file_exists($item['sourceAbsolutePath']) && (int) @filemtime($item['sourceAbsolutePath']) > $manifestTime) {
+                            $needsRebuild = true;
+                            break;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // ignore scanner check failure
+                }
+            }
+        }
+
+        if ($needsRebuild) {
+            $this->rebuildAssets();
+        }
+    }
+
+    /**
+     * Rebuilds assets using AssetBuilder and invalidates runtime manifest caches.
+     */
+    public function rebuildAssets(): bool
+    {
+        try {
+            $builder = $this->createAssetBuilder();
+            $builder->build(false);
+            $this->getManifestRegistry()->invalidateActiveManifest();
+            return true;
+        } catch (\Throwable $e) {
+            Yii::warning('Asset Optimizer auto-rebuild failed: ' . $e->getMessage(), __METHOD__);
+            return false;
+        }
+    }
+
+    /**
+     * Creates an AssetScanner configured for the current application.
+     */
+    public function createAssetScanner(): AssetScanner
+    {
+        $bundles = $this->scanBundles;
+        if (empty($bundles)) {
+            $bundles = AssetScanner::detectDefaultBundles();
+        }
+
+        if (!empty($this->bundles) && is_array($this->bundles)) {
+            foreach ($this->bundles as $bClass => $bVal) {
+                if ($bVal !== false && is_string($bClass) && !in_array($bClass, $bundles, true)) {
+                    $bundles[] = $bClass;
+                }
+            }
+        }
+
+        return new AssetScanner(
+            $bundles,
+            $this->scanExtraFiles,
+            $this->excludedBundles,
+            $this->excludedFiles
+        );
+    }
+
+    /**
+     * Creates an AssetBuilder instance.
+     */
+    public function createAssetBuilder(): AssetBuilder
+    {
+        $scanner = $this->createAssetScanner();
+        $runner = new EsbuildRunner($this->esbuildBin, $this->nodePath);
+
+        $builder = new AssetBuilder(
+            $runner,
+            $scanner,
+            $this->getManifestRegistry(),
+            $this->optimizerRuntimePath,
+            $this->optimizedBasePath,
+            $this->optimizedBaseUrl
+        );
+
+        $builder->combineAssets = $this->combineAssets;
+        $builder->combinedBundleName = $this->combinedBundleName;
+        $builder->uncombinedBundles = $this->uncombinedBundles;
+
+        return $builder;
     }
 }

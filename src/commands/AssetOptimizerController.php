@@ -527,40 +527,6 @@ class AssetOptimizerController extends Controller
      */
     private function detectDefaultBundles(): array
     {
-        $candidates = [];
-
-        if ($this->app === 'backend') {
-            $candidates[] = 'backend\assets\AppAsset';
-            $candidates[] = 'larikmc\admin\assets\AppAsset';
-            $candidates[] = 'larikmc\admin\auth\assets\AuthAsset';
-            $candidates[] = 'yii\bootstrap5\BootstrapPluginAsset';
-        } elseif ($this->app === 'frontend') {
-            $candidates[] = 'frontend\assets\AppAsset';
-        } else {
-            if (class_exists('frontend\assets\AppAsset')) {
-                $candidates[] = 'frontend\assets\AppAsset';
-            } elseif (class_exists('app\assets\AppAsset')) {
-                $candidates[] = 'app\assets\AppAsset';
-            }
-        }
-
-        $candidates[] = 'yii\bootstrap5\BootstrapPluginAsset';
-        $candidates[] = 'yii\bootstrap4\BootstrapPluginAsset';
-        $candidates[] = 'yii\bootstrap\BootstrapPluginAsset';
-        $candidates[] = 'yii\web\YiiAsset';
-        $candidates[] = 'yii\widgets\ActiveFormAsset';
-        $candidates[] = 'yii\validators\ValidationAsset';
-        $candidates[] = 'yii\grid\GridViewAsset';
-        $candidates[] = 'yii\widgets\PjaxAsset';
-        $candidates[] = 'yii\captcha\CaptchaAsset';
-
-        $existing = [];
-        foreach ($candidates as $class) {
-            if (class_exists($class)) {
-                $existing[] = $class;
-            }
-        }
-
-        return $existing;
+        return AssetScanner::detectDefaultBundles($this->app);
     }
 }

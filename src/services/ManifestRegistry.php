@@ -148,6 +148,18 @@ class ManifestRegistry
     }
 
     /**
+     * Invalidates in-memory and APCu cache of the active build.
+     * Called after auto-rebuild or version switch.
+     */
+    public function invalidateActiveManifest(): void
+    {
+        $this->activeBuildIdMemory = null;
+        if ($this->enableApcu) {
+            apcu_delete($this->apcuPrefix . 'active_build');
+        }
+    }
+
+    /**
      * Retrieves a Manifest by its build ID.
      */
     public function getManifest(string $buildId): ?Manifest

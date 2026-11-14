@@ -48,6 +48,14 @@ class Manifest
     public array $dependencies = [];
 
     /**
+     * Map of source absolute paths => mtime at build time.
+     * Used for ultra-fast change detection in dev mode.
+     *
+     * @var array<string, int>
+     */
+    public array $sourceFiles = [];
+
+    /**
      * Combined assets configuration and records if combineAssets was enabled.
      *
      * @var array{
@@ -141,6 +149,10 @@ class Manifest
             $result['combined'] = $this->combined;
         }
 
+        if (!empty($this->sourceFiles)) {
+            $result['sourceFiles'] = $this->sourceFiles;
+        }
+
         return $result;
     }
 
@@ -214,7 +226,32 @@ class Manifest
             $manifest->combined = $data['combined'];
         }
 
+        if (isset($data['sourceFiles']) && is_array($data['sourceFiles'])) {
+            $manifest->sourceFiles = $data['sourceFiles'];
+        }
+
         return $manifest;
+    }
+
+    /**
+     * Checks if any registered source file has been modified or removed since manifest build time.
+     */
+    public function hasChangedSourceFiles(): bool
+    {
+        if (empty($this->sourceFiles)) {
+            return false;
+        }
+
+        foreach ($this->sourceFiles as $path => $buildMtime) {
+            if (!file_exists($path)) {
+                return true;
+            }
+            if ((int) @filemtime($path) > (int) $buildMtime) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function hasCombinedAssets(): bool

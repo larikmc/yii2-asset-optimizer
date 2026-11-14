@@ -105,7 +105,7 @@ class AssetBuilder
             $manifest->toolchain = [
                 'php' => PHP_VERSION,
                 'esbuild' => $this->esbuildRunner->isAvailable() ? $this->esbuildRunner->getVersion() : 'unknown',
-                'optimizer' => '1.1.0',
+                'optimizer' => '1.2.0',
             ];
 
             $processedCount = 0;
@@ -125,6 +125,19 @@ class AssetBuilder
                 $originalSize = (int) @filesize($srcPath);
                 $sourceContent = (string) @file_get_contents($srcPath);
                 $sourceHash = hash('sha256', $sourceContent);
+
+                $manifest->sourceFiles[$srcPath] = $mtime;
+                if ($type === 'css') {
+                    $cssDir = dirname($srcPath);
+                    if (preg_match_all('/@import\s+[\'"]([^\'"\)]+)[\'"]/i', $sourceContent, $matches)) {
+                        foreach ($matches[1] as $importedRel) {
+                            $importedAbs = realpath($cssDir . DIRECTORY_SEPARATOR . $importedRel);
+                            if ($importedAbs && file_exists($importedAbs)) {
+                                $manifest->sourceFiles[$importedAbs] = (int) @filemtime($importedAbs);
+                            }
+                        }
+                    }
+                }
 
                 $cached = $cache[$key] ?? null;
                 $canReuse = false;
@@ -201,6 +214,12 @@ class AssetBuilder
 
                 $manifest->addAsset($record);
                 $newCache[$key] = $record->toArray();
+            }
+
+            foreach ($this->scanner->getBundleClassFiles() as $classFile) {
+                if (file_exists($classFile)) {
+                    $manifest->sourceFiles[$classFile] = (int) @filemtime($classFile);
+                }
             }
 
             if ($this->combineAssets) {

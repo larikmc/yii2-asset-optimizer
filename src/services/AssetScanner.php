@@ -35,6 +35,11 @@ class AssetScanner
     private array $excludedFiles;
 
     /**
+     * @var array<string, string> Map of bundle class => PHP file path on disk.
+     */
+    private array $bundleClassFiles = [];
+
+    /**
      * @param string[] $bundles AssetBundle class names.
      * @param string[] $extraFiles Additional files outside of bundles.
      * @param string[] $excludedBundles Bundles to skip.
@@ -148,6 +153,16 @@ class AssetScanner
 
         if (!class_exists($bundleClass)) {
             return;
+        }
+
+        try {
+            $reflector = new \ReflectionClass($bundleClass);
+            $fileName = $reflector->getFileName();
+            if ($fileName !== false && file_exists($fileName)) {
+                $this->bundleClassFiles[$bundleClass] = $fileName;
+            }
+        } catch (\Throwable $e) {
+            // ignore reflection failures
         }
 
         try {
@@ -273,5 +288,61 @@ class AssetScanner
             }
         }
         return false;
+    }
+
+    /**
+     * Returns the file paths of all scanned AssetBundle PHP classes.
+     *
+     * @return array<string, string>
+     */
+    public function getBundleClassFiles(): array
+    {
+        return $this->bundleClassFiles;
+    }
+
+    /**
+     * Discovers default candidate AssetBundle classes available in the application.
+     *
+     * @param string|null $app Optional target app name (e.g. 'frontend', 'backend').
+     * @return string[]
+     */
+    public static function detectDefaultBundles(?string $app = null): array
+    {
+        $candidates = [];
+
+        if ($app === 'backend' || (class_exists('Yii', false) && Yii::$app !== null && Yii::$app->id === 'app-backend')) {
+            $candidates[] = 'backend\assets\AppAsset';
+            $candidates[] = 'larikmc\admin\assets\AppAsset';
+            $candidates[] = 'larikmc\admin\auth\assets\AuthAsset';
+        } elseif ($app === 'frontend' || (class_exists('Yii', false) && Yii::$app !== null && Yii::$app->id === 'app-frontend')) {
+            $candidates[] = 'frontend\assets\AppAsset';
+        } else {
+            if (class_exists('frontend\assets\AppAsset')) {
+                $candidates[] = 'frontend\assets\AppAsset';
+            } elseif (class_exists('backend\assets\AppAsset')) {
+                $candidates[] = 'backend\assets\AppAsset';
+            } elseif (class_exists('app\assets\AppAsset')) {
+                $candidates[] = 'app\assets\AppAsset';
+            }
+        }
+
+        $candidates[] = 'yii\bootstrap5\BootstrapPluginAsset';
+        $candidates[] = 'yii\bootstrap4\BootstrapPluginAsset';
+        $candidates[] = 'yii\bootstrap\BootstrapPluginAsset';
+        $candidates[] = 'yii\web\YiiAsset';
+        $candidates[] = 'yii\widgets\ActiveFormAsset';
+        $candidates[] = 'yii\validators\ValidationAsset';
+        $candidates[] = 'yii\grid\GridViewAsset';
+        $candidates[] = 'yii\widgets\PjaxAsset';
+        $candidates[] = 'yii\captcha\CaptchaAsset';
+
+        $existing = [];
+        foreach ($candidates as $class) {
+            if (class_exists($class)) {
+                $existing[] = $class;
+            }
+        }
+
+        return $existing;
     }
 }

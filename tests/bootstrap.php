@@ -23,6 +23,10 @@ if (!$loaded) {
     throw new RuntimeException('Could not locate vendor/autoload.php. Run composer install first.');
 }
 
+// Define test environment constants before loading Yii
+defined('YII_DEBUG') or define('YII_DEBUG', true);
+defined('YII_ENV') or define('YII_ENV', 'test');
+
 // Locate Yii.php
 $yiiCandidates = [
     __DIR__ . '/../vendor/yiisoft/yii2/Yii.php',
