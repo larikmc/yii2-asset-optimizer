@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-11-15
+
+### Changed
+- **Default File Combining Enabled (`combineAssets = true`)**:
+  - `OptimizingAssetManager::$combineAssets` now defaults to `true`.
+  - `AssetBuilder::$combineAssets` now defaults to `true`.
+  - `AssetOptimizerController::detectCombineSetting()` now defaults to `true` when not explicitly specified in the web application configuration.
+
+### Fixed
+- **Esbuild CSS Asset Extraction**:
+  - Replaced overly broad `--external:/*` in `EsbuildRunner::minifyCss()` with specific root path prefixes (`--external:/fonts/*`, `--external:/img/*`, `--external:/images/*`, `--external:/uploads/*`, `--external:/assets/*`, `--external:http:*`, `--external:https:*`, `--external:data:*`).
+  - This ensures relative fonts, images, and SVG masks (such as `../fonts/Manrope-Variable.ttf`, `../../img/...`, and SVG masks `#topic-letter-mask`) referenced in CSS files are correctly extracted and hashed into `/optimized/assets/` rather than failing to resolve or producing 404 errors.
+- **Unit Test Autoloading**:
+  - Added upper directory candidate paths (`dirname(__DIR__, 4)`) in `tests/bootstrap.php` to enable out-of-the-box PHPUnit test execution when the package is tested within a host application's `vendor/` directory.
+
 ## [1.2.0] - 2026-11-14
 
 ### Added

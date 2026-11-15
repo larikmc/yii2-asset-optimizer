@@ -27,9 +27,9 @@ class AssetBuilder
     private string $lockFile;
 
     /**
-     * @var bool Whether to combine all CSS and JS into single common bundles.
+     * @var bool Whether to combine all CSS and JS into single common bundles. Defaults to true.
      */
-    public bool $combineAssets = false;
+    public bool $combineAssets = true;
 
     /**
      * @var string Base name for combined bundle files (e.g. 'all' -> 'all.hash.min.css').

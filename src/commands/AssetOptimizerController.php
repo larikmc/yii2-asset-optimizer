@@ -504,14 +504,14 @@ class AssetOptimizerController extends Controller
                 try {
                     $webConfig = @require $webConfigFile;
                     $am = $webConfig['components']['assetManager'] ?? [];
-                    if (is_array($am) && !empty($am['combineAssets'])) {
+                    if (is_array($am) && array_key_exists('combineAssets', $am)) {
                         return (bool) $am['combineAssets'];
                     }
                 } catch (\Throwable $e) {
                 }
             }
         }
-        return false;
+        return true;
     }
 
     private function createReleaseManager(): ReleaseManager

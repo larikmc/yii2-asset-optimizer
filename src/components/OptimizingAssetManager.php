@@ -61,11 +61,11 @@ class OptimizingAssetManager extends AssetManager
     public bool $bypassSourcePathPublish = false;
 
     /**
-     * @var bool Whether to combine all CSS and JS into single common bundles.
+     * @var bool Whether to combine all CSS and JS into single common bundles. Defaults to true.
      * When enabled and the active manifest contains combined assets,
      * individual bundled CSS and JS are served via CombinedAssetBundle.
      */
-    public bool $combineAssets = false;
+    public bool $combineAssets = true;
 
     /**
      * @var int Interval in seconds to cache active build ID in APCu (0 = check current.version on every request for instant sync).

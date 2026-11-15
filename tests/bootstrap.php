@@ -5,6 +5,8 @@ declare(strict_types=1);
 // Find vendor autoload
 $vendorAutoloadCandidates = [
     __DIR__ . '/../vendor/autoload.php',
+    dirname(__DIR__, 4) . '/vendor/autoload.php',
+    dirname(__DIR__, 3) . '/vendor/autoload.php',
     'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/autoload.php',
     'D:/OSPanel6.5.1/home/playlog.loc/vendor/autoload.php',
     dirname(__DIR__, 2) . '/vendor/autoload.php',
@@ -30,6 +32,8 @@ defined('YII_ENV') or define('YII_ENV', 'test');
 // Locate Yii.php
 $yiiCandidates = [
     __DIR__ . '/../vendor/yiisoft/yii2/Yii.php',
+    dirname(__DIR__, 4) . '/vendor/yiisoft/yii2/Yii.php',
+    dirname(__DIR__, 3) . '/vendor/yiisoft/yii2/Yii.php',
     'D:/OSPanel6.5.1/home/yii2-advanced.loc/vendor/yiisoft/yii2/Yii.php',
     'D:/OSPanel6.5.1/home/playlog.loc/vendor/yiisoft/yii2/Yii.php',
     dirname(__DIR__, 2) . '/vendor/yiisoft/yii2/Yii.php',

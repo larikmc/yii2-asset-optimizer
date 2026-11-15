@@ -52,6 +52,18 @@ class CombinedAssetTest extends TestCase
         @rmdir($dir);
     }
 
+    public function testDefaultCombineAssetsSetting(): void
+    {
+        $manager = new OptimizingAssetManager();
+        $this->assertTrue($manager->combineAssets, 'OptimizingAssetManager::$combineAssets must be true by default');
+
+        $esbuild = new EsbuildRunner();
+        $scanner = new AssetScanner([]);
+        $registry = new ManifestRegistry($this->runtimePath);
+        $builder = new AssetBuilder($esbuild, $scanner, $registry, $this->runtimePath, $this->webroot . '/optimized', '/optimized');
+        $this->assertTrue($builder->combineAssets, 'AssetBuilder::$combineAssets must be true by default');
+    }
+
     public function testManifestCombinedProperties(): void
     {
         $manifest = new Manifest('test-build-1');

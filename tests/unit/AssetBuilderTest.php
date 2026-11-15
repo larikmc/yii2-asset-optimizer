@@ -44,6 +44,7 @@ class AssetBuilderTest extends TestCase
             $this->optimizedBasePath,
             '/optimized'
         );
+        $builder->combineAssets = false;
 
         // First build: initial compilation
         $res1 = $builder->build(false);
