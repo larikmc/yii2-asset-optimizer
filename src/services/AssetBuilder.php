@@ -515,7 +515,7 @@ class AssetBuilder
                 $fp = fopen($entryFile, 'wb');
                 foreach (array_keys($jsSources) as $srcPath) {
                     $content = (string) file_get_contents($srcPath);
-                    fwrite($fp, "\n;\n/* --- " . basename($srcPath) . " --- */\n" . trim($content) . "\n;\n");
+                    fwrite($fp, "\n;\n{\n/* --- " . basename($srcPath) . " --- */\n" . trim($content) . "\n}\n;\n");
                 }
                 fclose($fp);
 

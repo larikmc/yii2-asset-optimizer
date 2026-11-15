@@ -249,10 +249,13 @@ class EsbuildRunner
 
         $command = $bin . ' ' . implode(' ', $escapedArgs);
 
+        $stdoutFile = tempnam(sys_get_temp_dir(), 'esb_out_');
+        $stderrFile = tempnam(sys_get_temp_dir(), 'esb_err_');
+
         $descriptors = [
             0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
+            1 => ['file', $stdoutFile, 'w'],
+            2 => ['file', $stderrFile, 'w'],
         ];
 
         // Prepend custom or detected Node directory to PATH if available
@@ -271,18 +274,19 @@ class EsbuildRunner
 
         $process = proc_open($command, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
+            @unlink($stdoutFile);
+            @unlink($stderrFile);
             throw new RuntimeException("Failed to launch esbuild process: {$command}");
         }
 
         fclose($pipes[0]);
 
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-
         $exitCode = proc_close($process);
+
+        $stdout = (string) @file_get_contents($stdoutFile);
+        $stderr = (string) @file_get_contents($stderrFile);
+        @unlink($stdoutFile);
+        @unlink($stderrFile);
 
         return [
             'exitCode' => $exitCode,

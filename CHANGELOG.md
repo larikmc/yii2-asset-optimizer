@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AssetOptimizerController::detectCombineSetting()` now defaults to `true` when not explicitly specified in the web application configuration.
 
 ### Fixed
+- **Esbuild Execution Deadlock Prevention**:
+  - Replaced sequential pipe streams in `EsbuildRunner::execute()` with OS temporary files for stdout/stderr redirection. This completely prevents pipe buffer deadlocks on Windows and Linux when a command emits large output.
+- **Combined JS Symbol Collision Prevention**:
+  - Isolated each concatenated JavaScript file in a block scope (`{ ... }`) within `entry_js.js`. This prevents JavaScript syntax errors caused by duplicate `let` and `const` declarations when merging multiple independent asset bundles into a single combined bundle.
 - **Esbuild CSS Asset Extraction**:
   - Replaced overly broad `--external:/*` in `EsbuildRunner::minifyCss()` with specific root path prefixes (`--external:/fonts/*`, `--external:/img/*`, `--external:/images/*`, `--external:/uploads/*`, `--external:/assets/*`, `--external:http:*`, `--external:https:*`, `--external:data:*`).
   - This ensures relative fonts, images, and SVG masks (such as `../fonts/Manrope-Variable.ttf`, `../../img/...`, and SVG masks `#topic-letter-mask`) referenced in CSS files are correctly extracted and hashed into `/optimized/assets/` rather than failing to resolve or producing 404 errors.
